@@ -1,0 +1,117 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+[RequireComponent(typeof(CharacterController))]
+public class PlayerMovement : MonoBehaviour
+{
+    public Camera playerCamera;
+    public float walkSpeed = 3f;
+    public float runSpeed = 6f;
+    public float jumpPower = 7f; // Default jump power (Space)
+    public float superJumpPower = 12f; // Super Jump power (E)
+    public float gravity = 20f;
+    public float lookSpeed = 2f;
+    public float lookXLimit = 90f;
+    public float defaultHeight = 2f;
+    public float crouchHeight = 1f;
+    public float crouchSpeed = 1.5f; // Reduced speed while crouching
+    public float crouchTransitionSpeed = 10f;
+
+    private Vector3 moveDirection = Vector3.zero;
+    private float rotationX = 0;
+    private CharacterController characterController;
+
+    private bool canMove = true;
+    private bool isCurrentlyRunning = false;
+    private bool isCrouching = false; // New variable for toggling crouch
+    private float targetHeight;
+
+    private Vector3 originalCameraPosition;
+
+    void Start()
+    {
+        characterController = GetComponent<CharacterController>();
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+
+        targetHeight = defaultHeight;
+        originalCameraPosition = playerCamera.transform.localPosition; // Save initial camera position
+    }
+
+    void Update()
+    {
+        Vector3 forward = transform.TransformDirection(Vector3.forward);
+        Vector3 right = transform.TransformDirection(Vector3.right);
+
+        bool isGrounded = characterController.isGrounded;
+
+        // Toggle crouch when Q is pressed
+        if (Input.GetKeyDown(KeyCode.Q) && canMove)
+        {
+            isCrouching = !isCrouching; // Toggle state
+        }
+
+        // Apply crouch height
+        targetHeight = isCrouching ? crouchHeight : defaultHeight;
+        characterController.height = Mathf.Lerp(characterController.height, targetHeight, crouchTransitionSpeed * Time.deltaTime);
+
+        // Adjust camera position smoothly
+        float cameraTargetY = isCrouching ? originalCameraPosition.y - 1f : originalCameraPosition.y;
+        playerCamera.transform.localPosition = new Vector3(originalCameraPosition.x, Mathf.Lerp(playerCamera.transform.localPosition.y, cameraTargetY, crouchTransitionSpeed * Time.deltaTime), originalCameraPosition.z);
+
+        if (isCrouching)
+        {
+            isCurrentlyRunning = false; // Prevent running while crouching
+        }
+
+        if (Input.GetKey(KeyCode.LeftShift) && isGrounded && !isCrouching)
+        {
+            isCurrentlyRunning = true;
+        }
+        else if (isGrounded)
+        {
+            isCurrentlyRunning = false;
+        }
+
+        float currentSpeed = isCrouching ? crouchSpeed : (isCurrentlyRunning ? runSpeed : walkSpeed);
+        float curSpeedX = canMove ? currentSpeed * Input.GetAxis("Vertical") : 0;
+        float curSpeedY = canMove ? currentSpeed * Input.GetAxis("Horizontal") : 0;
+
+        float movementDirectionY = moveDirection.y;
+
+        if (isGrounded)
+        {
+            moveDirection = (forward * curSpeedX) + (right * curSpeedY);
+        }
+
+        moveDirection.y = movementDirectionY;
+
+        // Normal Jump (Space)
+        if (Input.GetButton("Jump") && canMove && isGrounded && !isCrouching) // Prevent jumping while crouching
+        {
+            moveDirection.y = jumpPower;
+        }
+
+        // Super Jump (E)
+        if (Input.GetKeyDown(KeyCode.E) && canMove && isGrounded && !isCrouching) // Prevent super jump while crouching
+        {
+            moveDirection.y = superJumpPower;
+        }
+
+        if (!isGrounded)
+        {
+            moveDirection.y -= gravity * Time.deltaTime;
+        }
+
+        characterController.Move(moveDirection * Time.deltaTime);
+
+        if (canMove)
+        {
+            rotationX += -Input.GetAxis("Mouse Y") * lookSpeed;
+            rotationX = Mathf.Clamp(rotationX, -lookXLimit, lookXLimit);
+            playerCamera.transform.localRotation = Quaternion.Euler(rotationX, 0, 0);
+            transform.rotation *= Quaternion.Euler(0, Input.GetAxis("Mouse X") * lookSpeed, 0);
+        }
+    }
+}
